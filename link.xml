@@ -1,0 +1,9 @@
+<linker>
+  <assembly fullname="Newtonsoft.Json">
+    <type fullname="Newtonsoft.Json.*" preserve="all"/>
+  </assembly>
+
+  <assembly fullname="Siccity.GLTFUtility">
+    <type fullname="Siccity.GLTFUtility.*" preserve="all"/>
+  </assembly>
+</linker>

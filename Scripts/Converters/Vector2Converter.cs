@@ -18,7 +18,11 @@ namespace Siccity.GLTFUtility.Converters {
 			float[] floatArray = null;
 			try {
 				floatArray = serializer.Deserialize<float[]>(reader);
+#pragma warning disable IDE0059 // Unnecessary assignment of a value
+#pragma warning disable CS0168 // Variable is declared but never used
 			} catch (System.Exception e) {
+#pragma warning restore CS0168 // Variable is declared but never used
+#pragma warning restore IDE0059 // Unnecessary assignment of a value
 				floatArray = new float[] { serializer.Deserialize<float>(reader) };
 			}
 

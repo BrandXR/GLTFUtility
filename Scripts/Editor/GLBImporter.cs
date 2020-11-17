@@ -5,13 +5,19 @@ namespace Siccity.GLTFUtility {
 	[ScriptedImporter(1, "glb")]
 	public class GLBImporter : GLTFImporter {
 
-		public override void OnImportAsset(AssetImportContext ctx) {
+		public override void OnImportAsset(AssetImportContext ctx)
+		{
+			this.ctx = ctx;
+
 			// Load asset
-			AnimationClip[] animations;
 			if (importSettings == null) importSettings = new ImportSettings();
-			GameObject root = Importer.LoadFromFile(ctx.assetPath, importSettings, out animations, Format.GLB);
+			Importer.LoadFromFile(ctx.assetPath, importSettings, onFinished, Format.GLB);
+		}
+
+		private void onFinished( GameObject root, AnimationClip[ ] animations )
+		{
 			// Save asset
-			GLTFAssetUtility.SaveToAsset(root, animations, ctx, importSettings);
+			GLTFAssetUtility.SaveToAsset( root, animations, ctx );
 		}
 	}
 }

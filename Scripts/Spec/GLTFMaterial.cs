@@ -33,46 +33,62 @@ namespace Siccity.GLTFUtility {
 			public Material material;
 		}
 
+		//---------------------------------------------------------------------------------------//
+		/// <summary>
+		/// Sets the scale of the material, flipping the UV's if we know the texture orientation is incorrect for Unity
+		/// </summary>
+		/// <param name="mat"></param>
+		/// <param name="orientation"></param>
+
+		private static void SetScale( ref Material mat, GLTFImage.TextureOrientation orientation, string textureName = "", string propertyName = "" )
+		//---------------------------------------------------------------------------------------//
+		{
+			var scale = mat.mainTextureScale;
+			scale.x = orientation.IsXFlipped ? -1 : 1;
+			scale.y = orientation.IsYFlipped ? -1 : 1;
+			mat.SetTextureScale( propertyName, scale );
+			//Debug.Log( "GLTFMaterial SetScale() " + mat.name + " [ " + textureName + "] [ " + mat.GetTextureScale( propertyName ) + " ]" );
+
+		} //END SetScale
+
 		public IEnumerator CreateMaterial(GLTFTexture.ImportResult[] textures, ShaderSettings shaderSettings, Action<Material> onFinish) {
 			Material mat = null;
-			IEnumerator en = null;
+
 			// Load metallic-roughness materials
 			if (pbrMetallicRoughness != null) {
-				en = pbrMetallicRoughness.CreateMaterial(textures, alphaMode, shaderSettings, x => mat = x);
-				while (en.MoveNext()) { yield return null; };
+				yield return StaticCoroutine.Start( pbrMetallicRoughness.CreateMaterial(textures, alphaMode, shaderSettings, x => mat = x) );
 			}
 			// Load specular-glossiness materials
 			else if (extensions != null && extensions.KHR_materials_pbrSpecularGlossiness != null) {
-				en = extensions.KHR_materials_pbrSpecularGlossiness.CreateMaterial(textures, alphaMode, shaderSettings, x => mat = x);
-				while (en.MoveNext()) { yield return null; };
+				yield return StaticCoroutine.Start( extensions.KHR_materials_pbrSpecularGlossiness.CreateMaterial(textures, alphaMode, shaderSettings, x => mat = x) );
 			}
 			// Load fallback material
 			else mat = new Material(Shader.Find("Standard"));
 			// Normal texture
 			if (normalTexture != null) {
-				en = TryGetTexture(textures, normalTexture, true, tex => {
+				yield return StaticCoroutine.Start( TryGetTexture(textures, normalTexture, true, (tex, orientation) => {
 					if (tex != null) {
 						mat.SetTexture("_BumpMap", tex);
+						SetScale( ref mat, orientation, tex.name, "_BumpMap" );
 						mat.EnableKeyword("_NORMALMAP");
 						mat.SetFloat("_BumpScale", normalTexture.scale);
 						if (normalTexture.extensions != null) {
 							normalTexture.extensions.Apply(normalTexture, mat, "_BumpMap");
 						}
 					}
-				});
-				while (en.MoveNext()) { yield return null; };
+				}) );
 			}
 			// Occlusion texture
 			if (occlusionTexture != null) {
-				en = TryGetTexture(textures, occlusionTexture, true, tex => {
+				yield return StaticCoroutine.Start( TryGetTexture(textures, occlusionTexture, true, (tex, orientation) => {
 					if (tex != null) {
 						mat.SetTexture("_OcclusionMap", tex);
+						SetScale( ref mat, orientation, tex.name, "_OcclusionMap" );
 						if (occlusionTexture.extensions != null) {
 							occlusionTexture.extensions.Apply(occlusionTexture, mat, "_OcclusionMap");
 						}
 					}
-				});
-				while (en.MoveNext()) { yield return null; };
+				}) );
 			}
 			// Emissive factor
 			if (emissiveFactor != Color.black) {
@@ -81,16 +97,16 @@ namespace Siccity.GLTFUtility {
 			}
 			// Emissive texture
 			if (emissiveTexture != null) {
-				en = TryGetTexture(textures, emissiveTexture, false, tex => {
+				yield return StaticCoroutine.Start( TryGetTexture(textures, emissiveTexture, false, (tex, orientation) => {
 					if (tex != null) {
 						mat.SetTexture("_EmissionMap", tex);
+						SetScale( ref mat, orientation, tex.name, "_EmissionMap" );
 						mat.EnableKeyword("_EMISSION");
 						if (emissiveTexture.extensions != null) {
 							emissiveTexture.extensions.Apply(emissiveTexture, mat, "_EmissionMap");
 						}
 					}
-				});
-				while (en.MoveNext()) { yield return null; };
+				}) );
 			}
 
 			if (alphaMode == AlphaMode.MASK) {
@@ -100,22 +116,21 @@ namespace Siccity.GLTFUtility {
 			onFinish(mat);
 		}
 
-		public static IEnumerator TryGetTexture(GLTFTexture.ImportResult[] textures, TextureInfo texture, bool linear, Action<Texture2D> onFinish, Action<float> onProgress = null) {
+		public static IEnumerator TryGetTexture(GLTFTexture.ImportResult[] textures, TextureInfo texture, bool linear, Action<Texture2D, GLTFImage.TextureOrientation> onFinish, Action<float> onProgress = null) {
 			if (texture == null || texture.index < 0) {
 				if (onProgress != null) onProgress(1f);
-				onFinish(null);
+				onFinish(null, null);
 			}
 			if (textures == null) {
 				if (onProgress != null) onProgress(1f);
-				onFinish(null);
+				onFinish(null, null );
 			}
 			if (textures.Length <= texture.index) {
 				Debug.LogWarning("Attempted to get texture index " + texture.index + " when only " + textures.Length + " exist");
 				if (onProgress != null) onProgress(1f);
-				onFinish(null);
+				onFinish(null, null );
 			}
-			IEnumerator en = textures[texture.index].GetTextureCached(linear, onFinish, onProgress);
-			while (en.MoveNext()) { yield return null; };
+			yield return StaticCoroutine.Start( textures[texture.index].GetTextureCached(linear, onFinish, onProgress) );
 		}
 
 		[Preserve] public class Extensions {
@@ -149,15 +164,16 @@ namespace Siccity.GLTFUtility {
 						if (textures.Length <= baseColorTexture.index) {
 							Debug.LogWarning("Attempted to get basecolor texture index " + baseColorTexture.index + " when only " + textures.Length + " exist");
 						} else {
-							IEnumerator en = textures[baseColorTexture.index].GetTextureCached(false, tex => {
+
+							yield return StaticCoroutine.Start( textures[baseColorTexture.index].GetTextureCached(false, (tex, orientation) => {
 								if (tex != null) {
 									mat.SetTexture("_MainTex", tex);
+									SetScale( ref mat, orientation, tex.name, "_MainTex" );
 									if (baseColorTexture.extensions != null) {
 										baseColorTexture.extensions.Apply(baseColorTexture, mat, "_MainTex");
 									}
 								}
-							});
-							while (en.MoveNext()) { yield return null; };
+							}) );
 						}
 					}
 					// Metallic roughness texture
@@ -165,16 +181,16 @@ namespace Siccity.GLTFUtility {
 						if (textures.Length <= metallicRoughnessTexture.index) {
 							Debug.LogWarning("Attempted to get metallicRoughness texture index " + metallicRoughnessTexture.index + " when only " + textures.Length + " exist");
 						} else {
-							IEnumerator en = TryGetTexture(textures, metallicRoughnessTexture, true, tex => {
+							yield return StaticCoroutine.Start( TryGetTexture(textures, metallicRoughnessTexture, true, (tex, orientation) => {
 								if (tex != null) {
 									mat.SetTexture("_MetallicGlossMap", tex);
 									mat.EnableKeyword("_METALLICGLOSSMAP");
+									SetScale( ref mat, orientation, tex.name, "_MetallicGlossMap" );
 									if (metallicRoughnessTexture.extensions != null) {
 										metallicRoughnessTexture.extensions.Apply(metallicRoughnessTexture, mat, "_MetallicGlossMap");
 									}
 								}
-							});
-							while (en.MoveNext()) { yield return null; };
+							}) );
 						}
 					}
 				}
@@ -217,15 +233,15 @@ namespace Siccity.GLTFUtility {
 						if (textures.Length <= diffuseTexture.index) {
 							Debug.LogWarning("Attempted to get diffuseTexture texture index " + diffuseTexture.index + " when only " + textures.Length + " exist");
 						} else {
-							IEnumerator en = textures[diffuseTexture.index].GetTextureCached(false, tex => {
+							yield return StaticCoroutine.Start( textures[diffuseTexture.index].GetTextureCached(false, (tex, orientation) => {
 								if (tex != null) {
 									mat.SetTexture("_MainTex", tex);
+									SetScale( ref mat, orientation, tex.name, "_MainTex" );
 									if (diffuseTexture.extensions != null) {
 										diffuseTexture.extensions.Apply(diffuseTexture, mat, "_MainTex");
 									}
 								}
-							});
-							while (en.MoveNext()) { yield return null; };
+							}) );
 						}
 					}
 					// Specular texture
@@ -234,16 +250,16 @@ namespace Siccity.GLTFUtility {
 							Debug.LogWarning("Attempted to get specularGlossinessTexture texture index " + specularGlossinessTexture.index + " when only " + textures.Length + " exist");
 						} else {
 							mat.EnableKeyword("_SPECGLOSSMAP");
-							IEnumerator en = textures[specularGlossinessTexture.index].GetTextureCached(false, tex => {
+							yield return StaticCoroutine.Start( textures[specularGlossinessTexture.index].GetTextureCached(false, (tex, orientation) => {
 								if (tex != null) {
 									mat.SetTexture("_SpecGlossMap", tex);
+									SetScale( ref mat, orientation, tex.name, "_SpecGlossMap" );
 									mat.EnableKeyword("_SPECGLOSSMAP");
 									if (specularGlossinessTexture.extensions != null) {
 										specularGlossinessTexture.extensions.Apply(specularGlossinessTexture, mat, "_SpecGlossMap");
 									}
 								}
-							});
-							while (en.MoveNext()) { yield return null; };
+							}) );
 						}
 					}
 				}
@@ -302,9 +318,8 @@ namespace Siccity.GLTFUtility {
 				for (int i = 0; i < Result.Length; i++) {
 					Result[i] = new ImportResult();
 
-					IEnumerator en = materials[i].CreateMaterial(textureTask.Result, importSettings.shaderOverrides, x => Result[i].material = x);
-					while (en.MoveNext()) { yield return null; };
-
+					yield return StaticCoroutine.Start( materials[i].CreateMaterial(textureTask.Result, importSettings.shaderOverrides, x => Result[i].material = x) );
+					
 					if (Result[i].material.name == null) Result[i].material.name = "material" + i;
 					if (onProgress != null) onProgress.Invoke((float) (i + 1) / (float) Result.Length);
 					yield return null;

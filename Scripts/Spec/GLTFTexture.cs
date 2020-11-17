@@ -16,6 +16,7 @@ namespace Siccity.GLTFUtility {
 		public class ImportResult {
 			private GLTFImage.ImportResult image;
 			private Texture2D cache;
+			public GLTFImage.TextureOrientation orientation = new GLTFImage.TextureOrientation();
 
 			/// <summary> Constructor </summary>
 			public ImportResult(GLTFImage.ImportResult image) {
@@ -23,12 +24,11 @@ namespace Siccity.GLTFUtility {
 			}
 
 			/// <summary> Create or return cached texture </summary>
-			public IEnumerator GetTextureCached(bool linear, Action<Texture2D> onFinish, Action<float> onProgress = null) {
+			public IEnumerator GetTextureCached(bool linear, Action<Texture2D, GLTFImage.TextureOrientation> onFinish, Action<float> onProgress = null) {
 				if (cache == null) {
-					IEnumerator en = image.CreateTextureAsync(linear, x => cache = x, onProgress);
-					while (en.MoveNext()) { yield return null; };
+					yield return StaticCoroutine.Start( image.CreateTextureAsync(linear, (x, y) => { cache = x; orientation = y; }, image.mimeType, onProgress) );
 				}
-				onFinish(cache);
+				onFinish(cache, orientation);
 			}
 		}
 

@@ -1,21 +1,26 @@
-﻿using UnityEditor;
-using UnityEditor.Experimental.AssetImporters;
+﻿using UnityEditor.Experimental.AssetImporters;
 using UnityEngine;
 
 namespace Siccity.GLTFUtility {
 	[ScriptedImporter(1, "gltf")]
 	public class GLTFImporter : ScriptedImporter {
 
+		public AssetImportContext ctx;
 		public ImportSettings importSettings;
 
-		public override void OnImportAsset(AssetImportContext ctx) {
-			// Load asset
-			AnimationClip[] animations;
-			if (importSettings == null) importSettings = new ImportSettings();
-			GameObject root = Importer.LoadFromFile(ctx.assetPath, importSettings, out animations, Format.GLTF);
+		public override void OnImportAsset(AssetImportContext ctx)
+		{
+			this.ctx = ctx;
 
+			// Load asset
+			if (importSettings == null) importSettings = new ImportSettings();
+			Importer.LoadFromFile(ctx.assetPath, importSettings, onFinished, Format.GLTF);
+		}
+
+		private void onFinished( GameObject root, AnimationClip[ ] animations )
+		{
 			// Save asset
-			GLTFAssetUtility.SaveToAsset(root, animations, ctx, importSettings);
+			GLTFAssetUtility.SaveToAsset( root, animations, ctx );
 		}
 	}
 }
